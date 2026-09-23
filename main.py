@@ -1,22 +1,33 @@
 import io
 import re
+import os
+import threading
+from flask import Flask
 import telebot
 from telebot import types
 
-# Coloca aquí el token que te dio @BotFather
-TOKEN = "8630977701:AAGR_eX0cVlG2rNWg-k3CIqPmbWWHSPonag"
+# 1. Mini servidor web para Render (evita el error de 'No open ports')
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot en ejecución 24/7"
+
+def iniciar_servidor_web():
+    puerto = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=puerto)
+
+# 2. Configuración del Bot de Telegram
+TOKEN = "8630977701:AAGR_eX0cVlG2rNWg-k3CIqPmbWWHSPonag"  # <-- PEGA TU TOKEN AQUÍ
 bot = telebot.TeleBot(TOKEN)
 
-# Memoria temporal para guardar el archivo mientras el usuario elige el filtro
 archivos_temporales = {}
 
 def es_correo(texto):
-    """Verifica si el login tiene formato de correo electrónico."""
     patron = r'^[\w\.-]+@[\w\.-]+\.\w+$'
     return re.match(patron, texto) is not None
 
 def procesar_contenido(texto_crudo, criterio):
-    """Filtra las líneas y elimina duplicados conservando el orden."""
     lineas = texto_crudo.splitlines()
     lineas_unicas = set()
     resultado = []
@@ -53,8 +64,8 @@ def procesar_contenido(texto_crudo, criterio):
 @bot.message_handler(commands=['start', 'help'])
 def bienvenida(message):
     texto = (
-        "👋 <b>Bienvenido al Bot de Filtrado de Combos/Listas</b>\n\n"
-        "Adjunta y envía un archivo <code>.txt</code> para limpiarlo y organizarlo."
+        "👋 <b>Bienvenido al Bot de Filtrado</b>\n\n"
+        "Adjunta y envía un archivo <code>.txt</code> para procesarlo."
     )
     bot.reply_to(message, texto, parse_mode="HTML")
 
@@ -64,9 +75,8 @@ def recibir_documento(message):
         bot.reply_to(message, "❌ Envía únicamente archivos con extensión <code>.txt</code>.", parse_mode="HTML")
         return
 
-    # Límite de seguridad: 20 MB
     if message.document.file_size > 20 * 1024 * 1024:
-        bot.reply_to(message, "❌ El archivo supera el límite permitido de 20 MB.")
+        bot.reply_to(message, "❌ El archivo supera el límite de 20 MB.")
         return
 
     bot.reply_to(message, "📥 Descargando archivo...")
@@ -127,5 +137,10 @@ def procesar_opcion(call):
     bot.send_document(chat_id, buffer_salida, caption=resumen, parse_mode="HTML")
 
 if __name__ == "__main__":
+    # Arranca el servidor web en un hilo secundario para Render
+    t = threading.Thread(target=iniciar_servidor_web)
+    t.daemon = True
+    t.start()
+
     print("Bot de filtrado en ejecución...")
     bot.infinity_polling()
